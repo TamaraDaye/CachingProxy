@@ -1,4 +1,5 @@
 import socket
+import parser
 from http.server import BaseHTTPRequestHandler
 from io import BytesIO
 import threading
@@ -7,32 +8,26 @@ import argparse
 CACHE = {}
 
 
-class HTTPRequest(BaseHTTPRequestHandler):
-    def __init__(self, request_text):
-        self.rfile = BytesIO(request_text)
-        self.raw_requestline = self.rfile.readline()
-        self.parse_request()
-
-
 # FIXME: handle the args properly
 def get_args():
-    parser = argparse.ArgumentParser()
-    subparser = parser.add_subparsers(dest="cmd", required=True)
+    args_parser = argparse.ArgumentParser()
+    subparser = args_parser.add_subparsers(dest="cmd", required=True)
     caching_proxy = subparser.add_parser("caching-proxy")
     caching_proxy.add_argument("--port", type=int)
     caching_proxy.add_argument("--origin", type=str)
     caching_proxy.add_argument("--clear-cache", type=str)
-    args = parser.parse_args()
+    args = args_parser.parse_args()
 
     return args
 
 
 # TODO :implment the response from client if cache miss
-def get_response(request):
+def get_response(request_data):
     url = get_args().origin
     port = 80
     print(url)
-    print(request)
+    print(request_data)
+    request = parser.construct_request(request_data, url)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
         try:
             client.connect((url, port))
@@ -48,11 +43,6 @@ def get_response(request):
         except Exception as e:
             print(f"Exception found {e}")
         return response
-
-
-# FIXME:Handle request data for forwarding
-def request_handler(data):
-    location = get_args().origin
 
 
 def handle_client(client_socket, addr):
@@ -78,8 +68,6 @@ def handle_client(client_socket, addr):
                 client.sendall(CACHE[request_data])
 
             else:
-                request = parse_request(request_data)
-                print(request)
                 response = get_response(request_data)
                 print(response, request_data)
                 # pprint.pprint(CACHE, indent=4)

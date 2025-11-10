@@ -1,7 +1,5 @@
 import socket, ssl
 import parser
-from http.server import BaseHTTPRequestHandler
-from io import BytesIO
 import threading
 import argparse
 
@@ -26,7 +24,6 @@ def get_response(request_data):
     url = get_args().origin
     port = 443
     request = parser.construct_request(request_data, url)
-    print(request)
     context = ssl.create_default_context()
     with socket.create_connection((url, port)) as sock:
         with context.wrap_socket(sock, server_hostname=url) as ssock:
@@ -41,7 +38,6 @@ def get_response(request_data):
                     print("server terminated connection")
                     break
                 response += chunk
-    print(response)
     return response
 
 
@@ -65,12 +61,12 @@ def handle_client(client_socket, addr):
             request_data = buffer
 
             if request_data in CACHE:
+                print("Cache hit")
                 client.sendall(CACHE[request_data])
 
             else:
                 response = get_response(request_data)
-                print(response, request_data)
-                # pprint.pprint(CACHE, indent=4)
+                print("Getting data from origin")
                 CACHE[request_data] = response
                 client.sendall(response)
 

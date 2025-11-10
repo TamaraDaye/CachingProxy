@@ -1,4 +1,5 @@
-import socket, ssl
+import socket
+import ssl
 import parser
 import threading
 import argparse
@@ -6,8 +7,13 @@ import argparse
 CACHE = {}
 
 
-# FIXME: handle the args properly
+# argument parser for the caching server port and domain to cache responses
 def get_args():
+    """
+    This function returns an argparse namesapce containning the arguments for the application
+    port: port to run caching server origin
+    origin: the domain to reverse proxy for
+    """
     args_parser = argparse.ArgumentParser()
     subparser = args_parser.add_subparsers(dest="cmd", required=True)
     caching_proxy = subparser.add_parser("caching-proxy")
@@ -21,11 +27,28 @@ def get_args():
 
 # TODO :implment the response from client if cache miss
 def get_response(request_data):
+    """
+    Function to obtain response data for client socket instance uses raw requests
+    if request is cached return directly from the cache else creates a socket and hits the origin
+    endpoint for appropriate request caches after
+    """
     url = get_args().origin
     port = 443
-    request = parser.construct_request(request_data, url)
+
+    # Customer HTTP request parser to obtain the req line for caching and fixed headers for appropriate request forwarding
+    request, request_line = parser.construct_request(request_data, url)
+
+    # return cached responsed if in cache
+    if request_line in CACHE:
+        print("Getting data from Cache")
+        return CACHE[request_line]
+
+    # create a ssl object to secure tcp connection and use HTTPs
     context = ssl.create_default_context()
+
+    # create a tcp connection to be wrapped around with tls
     with socket.create_connection((url, port)) as sock:
+        # wraps tcp socket with tls security encrypting data sent and received
         with context.wrap_socket(sock, server_hostname=url) as ssock:
             ssock.sendall(request)
 
@@ -38,10 +61,15 @@ def get_response(request_data):
                     print("server terminated connection")
                     break
                 response += chunk
+    CACHE[request_line] = parser.construct_response(response)
+    print("Getting data from origin")
     return response
 
 
 def handle_client(client_socket, addr):
+    """
+    Function of handling client socket instances from their threads
+    """
     buffer = b""
 
     with client_socket as client:
@@ -55,26 +83,23 @@ def handle_client(client_socket, addr):
 
                 buffer += chunk
 
-                if b"\r\n\r\n" in buffer:
+                if b"\r\n\r\n" in buffer:  # stop at the end of the request
                     break
 
             request_data = buffer
-
-            if request_data in CACHE:
-                print("Cache hit")
-                client.sendall(CACHE[request_data])
-
-            else:
-                response = get_response(request_data)
-                print("Getting data from origin")
-                CACHE[request_data] = response
-                client.sendall(response)
+            response = get_response(request_data)
+            client.sendall(response)
 
         except Exception as e:
             print(f"Caught an exception {e}")
 
 
 def run_server():
+    """
+    create socket to act as server and uses multithreading
+    to spin individual threads for each client socket returned to avoid
+    blocking the main thread of execution
+    """
     args = get_args()
     PORT = args.port
     SERVER_IP = "0.0.0.0"
@@ -92,4 +117,5 @@ def run_server():
             thread.start()
 
 
-run_server()
+if __name__ == "__main__":
+    run_server()

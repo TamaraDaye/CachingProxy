@@ -1,29 +1,24 @@
 import email
-import pprint
 
 
 def parse_request(request_string):
     request, headers = request_string.decode().split("\r\n", 1)
-
     message = email.message_from_string(headers)
-
     headers = dict(message.items())
-
-    pprint.pprint(headers, width=160)
-
     return request, headers
 
 
-def construct_request(request_string, origin):
-    request, headers = parse_request(request_string)
+def construct_request(request_string, origin, body=b""):
+    request_line, headers = parse_request(request_string)
 
     headers["Host"] = origin
 
-    request_string = (
-        f"{request}"
-        + "\r\n"
-        + "".join(f"{k}: {v} \r\n" for k, v in headers.items())
-        + "\r\n"
-    )
+    headers["Connection"] = "close"
 
-    return request_string.encode("utf-8")
+    headers["Accept-Encoding"] = "identity"
+
+    header_block = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+
+    full_request = (f"{request_line}\r\n{header_block}\r\n").encode("utf-8") + body
+
+    return full_request

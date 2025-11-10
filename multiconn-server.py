@@ -1,4 +1,4 @@
-import socket
+import socket, ssl
 import parser
 from http.server import BaseHTTPRequestHandler
 from io import BytesIO
@@ -24,25 +24,25 @@ def get_args():
 # TODO :implment the response from client if cache miss
 def get_response(request_data):
     url = get_args().origin
-    port = 80
-    print(url)
-    print(request_data)
+    port = 443
     request = parser.construct_request(request_data, url)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-        try:
-            client.connect((url, port))
-            client.sendall(request)
-            buffer = b""
+    print(request)
+    context = ssl.create_default_context()
+    with socket.create_connection((url, port)) as sock:
+        with context.wrap_socket(sock, server_hostname=url) as ssock:
+            ssock.sendall(request)
+
+            response = b""
+
             while True:
-                chunk = client.recv(1024)
+                chunk = ssock.recv(4096)
+
                 if not chunk:
-                    print(f"Client terminated connection {url}")
+                    print("server terminated connection")
                     break
-                buffer += chunk
-            response = buffer
-        except Exception as e:
-            print(f"Exception found {e}")
-        return response
+                response += chunk
+    print(response)
+    return response
 
 
 def handle_client(client_socket, addr):
